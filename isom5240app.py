@@ -1,7 +1,6 @@
 import streamlit as st
 from PIL import Image
 from transformers import pipeline
-import torch
 
 st.set_page_config(page_title="AI Storyteller", layout="centered")
 
@@ -9,7 +8,7 @@ st.title("AI Image Storyteller")
 st.write("Upload an image to generate a caption, story, and audio output.")
 
 
-# Load Hugging Face Pipeline
+# Load Models
 @st.cache_resource
 def load_img2text_model():
     return pipeline(
@@ -28,29 +27,30 @@ def img2text(image):
 
 # 2. Text to Story
 def text2story(text):
-    # Place your story generation logic / LLM pipeline here
+    # To be completed (e.g., using an LLM pipeline or external API)
     story_text = f"Once upon a time, there was {text}. And so the story began..."
     return story_text
 
 
 # 3. Text to Audio
 def text2audio(story_text):
-    # Place your Text-to-Speech logic here
+    # To be completed (e.g., using a TTS pipeline or gTTS)
     audio_data = None
     return audio_data
 
 
-# Main UI Layout
+# Main App Layout
 uploaded_image = st.file_uploader(
     "Upload an image", type=["jpg", "jpeg", "png"]
 )
 
 if uploaded_image is not None:
+    # Process and display image
     image = Image.open(uploaded_image).convert("RGB")
     st.image(image, caption="Uploaded Image", use_container_width=True)
 
     if st.button("Generate Story"):
-        with st.spinner("Generating caption..."):
+        with st.spinner("Analyzing image..."):
             caption = img2text(image)
 
         st.subheader("1. Image Caption")

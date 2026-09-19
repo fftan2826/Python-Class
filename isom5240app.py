@@ -2,13 +2,14 @@ import streamlit as st
 from PIL import Image
 from transformers import pipeline
 
-st.set_page_config(page_title="Image to Story & Audio", layout="centered")
+st.set_page_config(page_title="AI Storyteller", layout="centered")
 
-st.title("Image to Story & Audio Converter")
-st.write("Upload an image to generate a caption, a story, and audio.")
+st.title("AI Image Storyteller")
+st.write("Upload an image to generate a caption, story, and audio output.")
 
 
-# Load Hugging Face Pipeline
+# Load Models
+@st.cache_resource
 def load_img2text_model():
     return pipeline(
         "image-to-text", model="Salesforce/blip-image-captioning-base"
@@ -26,40 +27,46 @@ def img2text(image):
 
 # 2. Text to Story
 def text2story(text):
-    # Implement story generation logic here (e.g., using an LLM pipeline or API)
-    story_text = f"Once upon a time, there was {text}. And so the adventure began..."
+    # To be completed (e.g., using an LLM pipeline or external API)
+    story_text = f"Once upon a time, there was {text}. And so the story began..."
     return story_text
 
 
 # 3. Text to Audio
 def text2audio(story_text):
-    # Implement text-to-speech logic here
+    # To be completed (e.g., using a TTS pipeline or gTTS)
     audio_data = None
     return audio_data
 
 
-# Streamlit UI
-uploaded_file = st.file_uploader(
-    "Choose an image...", type=["jpg", "jpeg", "png"]
+# Main App Layout
+uploaded_image = st.file_uploader(
+    "Upload an image", type=["jpg", "jpeg", "png"]
 )
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption="Uploaded Image", use_column_width=True)
+if uploaded_image is not None:
+    # Process and display image
+    image = Image.open(uploaded_image).convert("RGB")
+    st.image(image, caption="Uploaded Image", use_container_width=True)
 
-    with st.spinner("Processing image and generating story..."):
-        # Step 1: Captioning
-        caption = img2text(image)
-        st.subheader("Generated Caption:")
+    if st.button("Generate Story"):
+        with st.spinner("Analyzing image..."):
+            caption = img2text(image)
+
+        st.subheader("1. Image Caption")
         st.write(caption)
 
-        # Step 2: Story Generation
-        story = text2story(caption)
-        st.subheader("Generated Story:")
+        with st.spinner("Generating story..."):
+            story = text2story(caption)
+
+        st.subheader("2. Story")
         st.write(story)
 
-        # Step 3: Audio Generation
-        audio = text2audio(story)
+        with st.spinner("Converting story to audio..."):
+            audio = text2audio(story)
+
+        st.subheader("3. Audio")
         if audio:
-            st.subheader("Audio Story:")
             st.audio(audio)
+        else:
+            st.info("Audio generation pipeline pending completion.")

@@ -1,6 +1,7 @@
 import streamlit as st
 from PIL import Image
 from transformers import pipeline
+import torch
 
 st.set_page_config(page_title="AI Storyteller", layout="centered")
 

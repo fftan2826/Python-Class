@@ -1,7 +1,14 @@
+
+# import part
 import streamlit as st
 from PIL import Image
 from transformers import pipeline
 
+#Function Part
+
+
+# main part
+# set up page configuration
 st.set_page_config(page_title="Age Classification using ViT", layout="centered")
 
 st.title("Age Classification using ViT")

@@ -7,17 +7,16 @@ from transformers import pipeline
 from gtts import gTTS
 
 # =========================================================
-# Model Caching Functions
+# Model Loader Functions (Without Caching)
 # =========================================================
 
-@st.cache_resource
 def load_blip_captioner():
     """Loads BLIP model and processor for clear, accurate image captioning."""
     processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
     model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
     return processor, model
 
-@st.cache_resource
+
 def load_text2story_pipeline():
     """Loads TinyLlama pipeline for creative and engaging story generation."""
     return pipeline(

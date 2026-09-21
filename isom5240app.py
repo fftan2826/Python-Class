@@ -1,25 +1,27 @@
 import os
 import streamlit as st
 from PIL import Image
+from transformers import BlipProcessor, BlipForConditionalGeneration
 from transformers import pipeline
 from gtts import gTTS
 
 # =========================================================
-# Pipeline Caching Functions
-# Prevents model re-loading on every user interaction
+# Model Caching Functions
 # =========================================================
 
 @st.cache_resource
-def load_img2text_pipeline():
+def load_blip_captioner():
     """
-    Loads and caches the image captioning model.
-    Note: Updated to 'image-text-to-text' task as 'image-to-text' is deprecated in recent transformers.
+    Loads BLIP model and processor directly to ensure compatibility
+    across Python 3.10-3.14 and transformers library versions.
     """
-    return pipeline("image-text-to-text", model="Salesforce/blip-image-captioning-base")
+    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+    model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+    return processor, model
 
 @st.cache_resource
 def load_text2story_pipeline():
-    """Loads and caches the text generation model (GPT-2)."""
+    """Loads and caches the GPT-2 story generation pipeline."""
     return pipeline("text-generation", model="gpt2")
 
 
@@ -29,37 +31,39 @@ def load_text2story_pipeline():
 
 def img2text(image_input):
     """
-    Extracts descriptive text/caption from an uploaded image.
+    Generates a descriptive caption from an uploaded image.
     
     Parameters:
-        image_input (PIL.Image): The image uploaded by the user.
+        image_input (PIL.Image): Image provided by the user.
         
     Returns:
-        str: Generated caption describing the image content.
+        str: Descriptive text caption of the image.
     """
-    image_to_text_model = load_img2text_pipeline()
-    caption_result = image_to_text_model(image_input)
-    text = caption_result[0]["generated_text"]
-    return text
+    processor, model = load_blip_captioner()
+    
+    # Convert image format if needed
+    if image_input.mode != "RGB":
+        image_input = image_input.convert(mode="RGB")
+        
+    inputs = processor(image_input, return_tensors="pt")
+    out = model.generate(**inputs, max_new_tokens=50)
+    caption = processor.decode(out[0], skip_special_tokens=True)
+    return caption
 
 
 def text2story(text):
     """
-    Generates a fun, kid-friendly short story (approx. 50-100 words)
-    based on the image caption.
+    Generates a child-friendly story based on the image caption.
     
     Parameters:
-        text (str): The image caption/description.
+        text (str): Image caption text.
         
     Returns:
-        str: Expanded story narrative suitable for 3-10 year olds.
+        str: Story text tailored for kids aged 3-10.
     """
     generator = load_text2story_pipeline()
-    
-    # Prompt structured for a cheerful children's story
     prompt = f"Once upon a time, {text}. "
     
-    # Generate story with length constraints matching the 50-100 word requirement
     story_result = generator(
         prompt, 
         max_new_tokens=100, 
@@ -75,13 +79,13 @@ def text2story(text):
 
 def text2audio(story_text):
     """
-    Converts story text into an MP3 audio file using Google Text-to-Speech (gTTS).
+    Converts story text to an MP3 audio file using Google Text-to-Speech.
     
     Parameters:
-        story_text (str): Story content to be converted into speech.
+        story_text (str): Generated story text.
         
     Returns:
-        str: File path to the generated MP3 audio file.
+        str: File path to saved MP3 file.
     """
     audio_path = "generated_story.mp3"
     tts = gTTS(text=story_text, lang='en', slow=False)
@@ -90,39 +94,34 @@ def text2audio(story_text):
 
 
 # =========================================================
-# Streamlit Web Application Interface
+# Streamlit Interface
 # =========================================================
 
 def main():
-    # Page configuration
     st.set_page_config(page_title="Magic Storyteller", page_icon="📖", layout="centered")
     
-    # Header and kid-friendly interface description
     st.title("🧙‍♂️ Magic Storyteller for Kids!")
     st.write("Upload a picture, and let the AI tell you a fun story!")
 
-    # File uploader for images
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
-        # Display uploaded image using current Streamlit API parameter
         image = Image.open(uploaded_file)
         st.image(image, caption="Your Uploaded Image", use_container_width=True)
         
-        # Action button to trigger pipeline execution
         if st.button("✨ Create Magic Story"):
-            # Step 1: Image to Text
+            # Step 1: Image Captioning
             with st.spinner("1️⃣ Reading your image..."):
                 caption = img2text(image)
                 st.info(f"**Image Context:** {caption}")
 
-            # Step 2: Text to Story
+            # Step 2: Story Generation
             with st.spinner("2️⃣ Writing a wonderful story..."):
                 story = text2story(caption)
                 st.subheader("📖 Your Story:")
                 st.write(story)
 
-            # Step 3: Story to Audio
+            # Step 3: Text to Audio
             with st.spinner("3️⃣ Generating audio..."):
                 audio_file_path = text2audio(story)
                 st.subheader("🎧 Listen to the Story:")

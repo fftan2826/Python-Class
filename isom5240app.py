@@ -1,72 +1,112 @@
+import os
 import streamlit as st
 from PIL import Image
 from transformers import pipeline
+from gtts import gTTS
 
-st.set_page_config(page_title="AI Storyteller", layout="centered")
+# ==========================================
+# Caching Hugging Face Pipelines for Performance
+# ==========================================
 
-st.title("AI Image Storyteller")
-st.write("Upload an image to generate a caption, story, and audio output.")
-
-
-# Load Models
 @st.cache_resource
-def load_img2text_model():
-    return pipeline(
-        "image-to-text", model="Salesforce/blip-image-captioning-base"
-    )
+def load_img2text_pipeline():
+    """Load and cache the image-captioning model."""
+    return pipeline("image-to-text", model="Salesforce/blip-image-captioning-base")
+
+@st.cache_resource
+def load_text2story_pipeline():
+    """Load and cache the text-generation model for generating stories."""
+    return pipeline("text-generation", model="gpt2")
 
 
-img2text_model = load_img2text_model()
+# ==========================================
+# Core Functionalities
+# ==========================================
+
+def img2text(image_input):
+    """
+    Extracts descriptive text/caption from an image.
+    Accepts either an image URL or a PIL Image object.
+    """
+    image_to_text_model = load_img2text_pipeline()
+    caption_result = image_to_text_model(image_input)
+    text = caption_result[0]["generated_text"]
+    return text
 
 
-# 1. Image to Text
-def img2text(image):
-    result = img2text_model(image)
-    return result[0]["generated_text"]
-
-
-# 2. Text to Story
 def text2story(text):
-    # To be completed (e.g., using an LLM pipeline or external API)
-    story_text = f"Once upon a time, there was {text}. And so the story began..."
+    """
+    Generates a fun, child-friendly short story (approx. 50-100 words)
+    based on the provided image caption using a text generation model.
+    """
+    generator = load_text2story_pipeline()
+    
+    # Prompt structured to encourage a cheerful story suitable for 3-10 year old kids
+    prompt = f"Once upon a time, {text}. "
+    
+    # Generate text with max_new_tokens to target roughly 50-100 words
+    story_result = generator(
+        prompt, 
+        max_new_tokens=100, 
+        min_new_tokens=50, 
+        do_sample=True, 
+        temperature=0.7,
+        pad_token_id=50256
+    )
+    
+    story_text = story_result[0]["generated_text"]
     return story_text
 
 
-# 3. Text to Audio
 def text2audio(story_text):
-    # To be completed (e.g., using a TTS pipeline or gTTS)
-    audio_data = None
-    return audio_data
+    """
+    Converts generated story text into an MP3 audio file using gTTS
+    and returns the saved file path.
+    """
+    audio_path = "generated_story.mp3"
+    tts = gTTS(text=story_text, lang='en', slow=False)
+    tts.save(audio_path)
+    return audio_path
 
 
-# Main App Layout
-uploaded_image = st.file_uploader(
-    "Upload an image", type=["jpg", "jpeg", "png"]
-)
+# ==========================================
+# Streamlit Main UI & Application Logic
+# ==========================================
 
-if uploaded_image is not None:
-    # Process and display image
-    image = Image.open(uploaded_image).convert("RGB")
-    st.image(image, caption="Uploaded Image", use_container_width=True)
+def main():
+    # Page configuration
+    st.set_page_config(page_title="Magic Storyteller", page_icon="📖", layout="centered")
+    
+    # Kid-friendly interface title and description
+    st.title("🧙‍♂️ Magic Storyteller for Kids!")
+    st.write("Upload a picture, and let the AI tell you a fun story!")
 
-    if st.button("Generate Story"):
-        with st.spinner("Analyzing image..."):
-            caption = img2text(image)
+    # File uploader for images
+    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
-        st.subheader("1. Image Caption")
-        st.write(caption)
+    if uploaded_file is not None:
+        # Display uploaded image
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Your Uploaded Image", use_column_width=True)
+        
+        # Action button to trigger generation
+        if st.button("✨ Create Magic Story"):
+            with st.spinner("1️⃣ Reading your image..."):
+                caption = img2text(image)
+                st.info(f"**Image Context:** {caption}")
 
-        with st.spinner("Generating story..."):
-            story = text2story(caption)
+            with st.spinner("2️⃣ Writing a wonderful story..."):
+                story = text2story(caption)
+                st.subheader("📖 Your Story:")
+                st.write(story)
 
-        st.subheader("2. Story")
-        st.write(story)
+            with st.spinner("3️⃣ Generating audio..."):
+                audio_file_path = text2audio(story)
+                st.subheader("🎧 Listen to the Story:")
+                st.audio(audio_file_path, format="audio/mp3")
 
-        with st.spinner("Converting story to audio..."):
-            audio = text2audio(story)
+            st.balloons()
 
-        st.subheader("3. Audio")
-        if audio:
-            st.audio(audio)
-        else:
-            st.info("Audio generation pipeline pending completion.")
+
+if __name__ == "__main__":
+    main()

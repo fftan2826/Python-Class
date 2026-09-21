@@ -1,5 +1,6 @@
 streamlit
-transformers
+transformers>=4.38.0
 torch
 gTTS
 Pillow
+accelerate

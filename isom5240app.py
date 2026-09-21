@@ -12,8 +12,7 @@ from gtts import gTTS
 @st.cache_resource
 def load_blip_captioner():
     """
-    Loads BLIP model and processor directly to ensure compatibility
-    across Python 3.10-3.14 and transformers library versions.
+    Loads BLIP model and processor for extracting accurate captions from images.
     """
     processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
     model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
@@ -21,8 +20,14 @@ def load_blip_captioner():
 
 @st.cache_resource
 def load_text2story_pipeline():
-    """Loads and caches the GPT-2 story generation pipeline."""
-    return pipeline("text-generation", model="gpt2")
+    """
+    Loads TinyLlama, a lightweight instruct model that adheres closely to prompt instructions.
+    """
+    return pipeline(
+        "text-generation", 
+        model="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        torch_dtype="auto"
+    )
 
 
 # =========================================================
@@ -32,16 +37,10 @@ def load_text2story_pipeline():
 def img2text(image_input):
     """
     Generates a descriptive caption from an uploaded image.
-    
-    Parameters:
-        image_input (PIL.Image): Image provided by the user.
-        
-    Returns:
-        str: Descriptive text caption of the image.
     """
     processor, model = load_blip_captioner()
     
-    # Convert image format if needed
+    # Ensure image is in RGB format
     if image_input.mode != "RGB":
         image_input = image_input.convert(mode="RGB")
         
@@ -51,41 +50,52 @@ def img2text(image_input):
     return caption
 
 
-def text2story(text):
+def text2story(caption_text):
     """
-    Generates a child-friendly story based on the image caption.
-    
-    Parameters:
-        text (str): Image caption text.
-        
-    Returns:
-        str: Story text tailored for kids aged 3-10.
+    Generates an accurate, child-friendly story based strictly on the image caption.
     """
     generator = load_text2story_pipeline()
-    prompt = f"Once upon a time, {text}. "
+    
+    # Formulate a structured prompt using TinyLlama's chat template format
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a friendly children's storyteller. Write a short, fun, and warm "
+                "story for young children (3-10 years old). The story MUST directly describe and "
+                "be based on what is happening in the provided image caption. Keep it between 50 and 80 words."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Write a children's story based on this image description: '{caption_text}'."
+        },
+    ]
+    
+    prompt = generator.tokenizer.apply_chat_template(
+        messages, 
+        tokenize=False, 
+        add_generation_prompt=True
+    )
     
     story_result = generator(
         prompt, 
-        max_new_tokens=100, 
-        min_new_tokens=50, 
+        max_new_tokens=120, 
         do_sample=True, 
-        temperature=0.7,
-        pad_token_id=50256
+        temperature=0.6,
+        top_p=0.9
     )
     
-    story_text = story_result[0]["generated_text"]
+    # Extract response text generated after the prompt
+    generated_output = story_result[0]["generated_text"]
+    story_text = generated_output.split("<|assistant|>")[-1].strip()
+    
     return story_text
 
 
 def text2audio(story_text):
     """
     Converts story text to an MP3 audio file using Google Text-to-Speech.
-    
-    Parameters:
-        story_text (str): Generated story text.
-        
-    Returns:
-        str: File path to saved MP3 file.
     """
     audio_path = "generated_story.mp3"
     tts = gTTS(text=story_text, lang='en', slow=False)

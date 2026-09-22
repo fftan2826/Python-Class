@@ -15,7 +15,7 @@ def img2text(image_input):
     Generates a clean, error-free caption using Beam Search and Repetition Penalty.
     Uses internal caching to prevent reloading the 1GB BLIP model weights on every click.
     """
-    # --- OPTIMIZATION: Cache the BLIP loader internally ---
+    # OPTIMIZATION: Cache the BLIP loader internally
     @st.cache_resource
     def _cached_blip_loader():
         processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
@@ -52,9 +52,9 @@ def text2story(caption_text):
     """
     Generates a lively, interactive children's story (50-100 words) packed with
     sound effects, excitement, and a question for the reader.
-    Uses internal caching to prevent reloading the 2GB LLM pipeline on every click.
+    Uses internal caching and an automatic closure fallback to guarantee completeness.
     """
-    # --- OPTIMIZATION: Cache the LLM pipeline loader internally ---
+    # OPTIMIZATION: Cache the LLM pipeline loader internally
     @st.cache_resource
     def _cached_llm_loader():
         return pipeline(
@@ -70,16 +70,16 @@ def text2story(caption_text):
         {
             "role": "system",
             "content": (
-                "You are a magical, energetic children's storyteller. Write a super fun, "
+                "You are a magical, energetic children's storyteller. Write a complete, "
                 "exciting short story (50 to 80 words) for kids aged 3 to 10. "
                 "The story MUST directly match the provided image description. "
                 "Use fun sound effects (like 'Wheee!', 'Splash!', or 'Pop!'), give the main character a name, "
-                "and end with an exciting question to the child reader!"
+                "and end with an exciting question to the child reader! Do not cut off mid-sentence."
             ),
         },
         {
             "role": "user",
-            "content": f"Write an exciting story based on this image description: '{caption_text}'."
+            "content": f"Write a complete exciting short story based on this image description: '{caption_text}'."
         },
     ]
     
@@ -89,9 +89,10 @@ def text2story(caption_text):
         add_generation_prompt=True
     )
     
+    # OPTIMIZATION: Increased max_new_tokens to 250 to give the model room to finish the story properly
     story_result = generator(
         prompt, 
-        max_new_tokens=130, 
+        max_new_tokens=250, 
         do_sample=True, 
         temperature=0.7,
         top_p=0.9,
@@ -102,6 +103,17 @@ def text2story(caption_text):
     generated_output = story_result[0]["generated_text"]
     story_text = generated_output.split("<|assistant|>")[-1].strip()
     
+    # OPTIMIZATION: Fallback mechanism to fix truncated sentences
+    if not story_text.endswith(('.', '!', '?', '"')):
+        # Find the last completed sentence
+        last_punctuation = max(story_text.rfind('.'), story_text.rfind('!'), story_text.rfind('?'))
+        if last_punctuation != -1:
+            # Cut off the broken sentence fragment and append a classic fairy-tale ending
+            story_text = story_text[:last_punctuation + 1] + " And they lived happily ever after! What do you think happens next?"
+        else:
+            # If no punctuation was found at all, append a clean closure
+            story_text += "... And they lived happily ever after! Would you like to join their adventure?"
+            
     return story_text
 
 

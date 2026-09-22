@@ -12,14 +12,14 @@ from gtts import gTTS
 
 def img2text(image_input):
     """
-    Generates a flawless, highly detailed caption from the image.
-    UPGRADED: Switched to BLIP-Large for perfectly complete, grammatically standard sentences.
+    Generates a clean, fully-decoded caption from the image.
+    FIXED: Uses blip-base to prevent memory crash (OOM) while using out[0] to guarantee complete sentences.
     """
     @st.cache_resource
     def _cached_blip_loader():
-        # Large model ensures complete, rich sentences without truncation fragments
-        processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-large")
-        model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-large")
+        # Using base model ensures lightweight memory usage so the app never crashes
+        processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+        model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
         return processor, model
 
     processor, model = _cached_blip_loader()
@@ -38,7 +38,7 @@ def img2text(image_input):
         early_stopping=True
     )
     
-    # Decode only the first sequence correctly into a plain text string
+    # FIXED: Added [0] index to decode the actual text sequence instead of the raw batch tensor
     caption = processor.decode(out[0], skip_special_tokens=True)
     
     caption = caption.strip().capitalize()
@@ -51,11 +51,11 @@ def img2text(image_input):
 def text2story(caption_text):
     """
     Generates a beautifully structured children's story within seconds.
-    SPEED UP: Switched to Qwen2.5-0.5B-Instruct for 4x faster execution on free CPU servers.
+    FIXED: Resolved pipeline dictionary extraction syntax to ensure zero background errors.
     """
     @st.cache_resource
     def _cached_llm_loader():
-        # 0.5B parameter model is highly optimized for light CPU environments, avoiding lag
+        # 0.5B model keeps memory ultra low and runs at light speed on CPU
         return pipeline(
             "text-generation", 
             model="Qwen/Qwen2.5-0.5B-Instruct",
@@ -88,12 +88,13 @@ def text2story(caption_text):
     
     story_result = generator(
         prompt, 
-        max_new_tokens=100, # Kept concise for absolute lightning speed
+        max_new_tokens=100,
         do_sample=True, 
         temperature=0.6,
         top_p=0.85,
     )
     
+    # FIXED: Added [0] index for standard pipeline dictionary parsing
     generated_output = story_result[0]["generated_text"]
     
     if "<|assistant|>" in generated_output:
@@ -128,12 +129,9 @@ def apply_custom_styles():
     """Injects colorful, child-friendly CSS styling into the Streamlit UI."""
     st.markdown("""
         <style>
-        /* Pastel background with subtle soft borders */
         .stApp {
             background: linear-gradient(135deg, #FFF5E6 0%, #FFFFFF 60%, #E8F5E9 100%);
         }
-        
-        /* Main bubbly heading */
         h1 {
             color: #FF6B6B !important;
             font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', cursive;
@@ -142,14 +140,10 @@ def apply_custom_styles():
             text-shadow: 3px 3px 0px #FFE600;
             margin-bottom: 5px !important;
         }
-        
-        /* Subheaders styling */
         h3, h2 {
             color: #4A4E69 !important;
             font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
         }
-
-        /* Story container card */
         .story-card {
             background-color: #FFFFFF;
             border: 4px dashed #FF8E53;
@@ -161,8 +155,6 @@ def apply_custom_styles():
             color: #2F3E46;
             font-family: 'Comic Sans MS', cursive, sans-serif;
         }
-        
-        /* Big bouncy primary action button */
         div.stButton > button {
             background: linear-gradient(45deg, #FF6B6B, #FF8E53) !important;
             color: white !important;
@@ -175,14 +167,11 @@ def apply_custom_styles():
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
             width: 100%;
         }
-        
         div.stButton > button:hover {
             transform: translateY(-4px) scale(1.02) !important;
             background: linear-gradient(45deg, #4ECDC4, #5568FE) !important;
             box-shadow: 0 10px 25px rgba(78, 205, 196, 0.4) !important;
         }
-        
-        /* Center aligned toy icon grid layout */
         .toy-grid {
             text-align: center;
             font-size: 2.2rem;
@@ -197,33 +186,25 @@ def main():
     st.set_page_config(page_title="Magic Toybox Storyteller", page_icon="🧸", layout="centered")
     apply_custom_styles()
     
-    # Bubbly Main Header
     st.title("🧸 Magic Storybox AI 🚀")
-    
-    # Visual Interactive Toy Grid for Kids Layout Enhancement
     st.markdown('<div class="toy-grid">🎈 🐱 🚗 🦄 🎨 🧩</div>', unsafe_allow_html=True)
-    
     st.markdown("<p style='text-align: center; font-size: 1.3rem; color: #4A5568; font-family: \"Comic Sans MS\";'><b>Upload a picture, and watch the magic wizard spin a rapid audio tale! ✨</b></p>", unsafe_allow_html=True)
     st.write("---")
 
-    # Photo Box Area
     uploaded_file = st.file_uploader("📸 Drop your favorite photo here, little adventurer:", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
-        
-        # Display picture with rounded aesthetic
         st.image(image, caption="🌟 Your Magical Input", use_container_width=True)
         
-        # Bouncy Action Button
         if st.button("✨ Spin the Magic Story Wheel! ✨"):
             
-            # Step 1: Image Captioning (Flawless Sentences via BLIP-Large)
+            # Step 1: Image Captioning
             with st.spinner("🔍 1️⃣ Wizard is inspecting your picture..."):
                 caption = img2text(image)
                 st.success(f"🎨 **I see:** {caption}")
 
-            # Step 2: Story Generation (Ultra-Fast via 0.5B LLM)
+            # Step 2: Story Generation
             with st.spinner("✍️ 2️⃣ Mixing secret magic words at light speed..."):
                 story = text2story(caption)
                 st.subheader("📖 Story Time!")

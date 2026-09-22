@@ -7,34 +7,22 @@ from transformers import pipeline
 from gtts import gTTS
 
 # =========================================================
-# Model Loader Functions (Without Caching)
-# =========================================================
-
-def load_blip_captioner():
-    """Loads BLIP model and processor for clear, accurate image captioning."""
-    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-    model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
-    return processor, model
-
-
-def load_text2story_pipeline():
-    """Loads TinyLlama pipeline for creative and engaging story generation."""
-    return pipeline(
-        "text-generation", 
-        model="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-        torch_dtype="auto"
-    )
-
-
-# =========================================================
-# Core Processing Functions
+# Core Processing Functions (With Internal Caching)
 # =========================================================
 
 def img2text(image_input):
     """
     Generates a clean, error-free caption using Beam Search and Repetition Penalty.
+    Uses internal caching to prevent reloading the 1GB BLIP model weights on every click.
     """
-    processor, model = load_blip_captioner()
+    # --- OPTIMIZATION: Cache the BLIP loader internally ---
+    @st.cache_resource
+    def _cached_blip_loader():
+        processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+        model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+        return processor, model
+
+    processor, model = _cached_blip_loader()
     
     if image_input.mode != "RGB":
         image_input = image_input.convert(mode="RGB")
@@ -64,8 +52,18 @@ def text2story(caption_text):
     """
     Generates a lively, interactive children's story (50-100 words) packed with
     sound effects, excitement, and a question for the reader.
+    Uses internal caching to prevent reloading the 2GB LLM pipeline on every click.
     """
-    generator = load_text2story_pipeline()
+    # --- OPTIMIZATION: Cache the LLM pipeline loader internally ---
+    @st.cache_resource
+    def _cached_llm_loader():
+        return pipeline(
+            "text-generation", 
+            model="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+            torch_dtype="auto"
+        )
+
+    generator = _cached_llm_loader()
     
     # Playful prompt designed specifically for children aged 3-10
     messages = [

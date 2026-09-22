@@ -12,12 +12,12 @@ from gtts import gTTS
 
 def img2text(image_input):
     """
-    Generates a clean, fully-decoded caption from the image.
-    FIXED: Uses blip-base to prevent memory crash (OOM) while using out[0] to guarantee complete sentences.
+    Generates a clean, error-free caption using Beam Search and Repetition Penalty.
+    Uses internal caching to prevent reloading the 1GB BLIP model weights on every click.
     """
+    # OPTIMIZATION: Cache the BLIP loader internally
     @st.cache_resource
     def _cached_blip_loader():
-        # Using base model ensures lightweight memory usage so the app never crashes
         processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
         model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
         return processor, model
@@ -29,18 +29,18 @@ def img2text(image_input):
         
     inputs = processor(image_input, return_tensors="pt")
     
-    # Beam search combined with strict constraints for elite accuracy
+    # Beam search ensures full sentences and prevents vocabulary fragments
     out = model.generate(
         **inputs, 
-        max_new_tokens=40,
+        max_new_tokens=50,
         num_beams=5,
         no_repeat_ngram_size=2,
+        repetition_penalty=1.5,
         early_stopping=True
     )
-    
-    # FIXED: Added [0] index to decode the actual text sequence instead of the raw batch tensor
     caption = processor.decode(out[0], skip_special_tokens=True)
     
+    # Post-processing clean-up
     caption = caption.strip().capitalize()
     if not caption.endswith('.'):
         caption += '.'
@@ -50,33 +50,36 @@ def img2text(image_input):
 
 def text2story(caption_text):
     """
-    Generates a beautifully structured children's story within seconds.
-    FIXED: Resolved pipeline dictionary extraction syntax to ensure zero background errors.
+    Generates a lively, interactive children's story (50-100 words) packed with
+    sound effects, excitement, and a question for the reader.
+    Uses internal caching and an automatic closure fallback to guarantee completeness.
     """
+    # OPTIMIZATION: Cache the LLM pipeline loader internally
     @st.cache_resource
     def _cached_llm_loader():
-        # 0.5B model keeps memory ultra low and runs at light speed on CPU
         return pipeline(
             "text-generation", 
-            model="Qwen/Qwen2.5-0.5B-Instruct",
+            model="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
             torch_dtype="auto"
         )
 
     generator = _cached_llm_loader()
     
+    # Playful prompt designed specifically for children aged 3-10
     messages = [
         {
             "role": "system",
             "content": (
-                "You are a magical children's author. Write a short, complete bedtime story "
-                "(around 50 words) for kids based exactly on the image description. "
-                "Name the main character, use simple words, add one sound effect (like 'Wow!' or 'Boing!'), "
-                "and end with one simple question. Do not cut off mid-sentence."
+                "You are a magical, energetic children's storyteller. Write a complete, "
+                "exciting short story (50 to 80 words) for kids aged 3 to 10. "
+                "The story MUST directly match the provided image description. "
+                "Use fun sound effects (like 'Wheee!', 'Splash!', or 'Pop!'), give the main character a name, "
+                "and end with an exciting question to the child reader! Do not cut off mid-sentence."
             ),
         },
         {
             "role": "user",
-            "content": f"Story prompt: '{caption_text}'."
+            "content": f"Write a complete exciting short story based on this image description: '{caption_text}'."
         },
     ]
     
@@ -86,29 +89,30 @@ def text2story(caption_text):
         add_generation_prompt=True
     )
     
+    # OPTIMIZATION: Increased max_new_tokens to 250 to give the model room to finish the story properly
     story_result = generator(
         prompt, 
-        max_new_tokens=100,
+        max_new_tokens=250, 
         do_sample=True, 
-        temperature=0.6,
-        top_p=0.85,
+        temperature=0.7,
+        top_p=0.9,
+        repetition_penalty=1.2
     )
     
-    # FIXED: Added [0] index for standard pipeline dictionary parsing
+    # Extract model output
     generated_output = story_result[0]["generated_text"]
+    story_text = generated_output.split("<|assistant|>")[-1].strip()
     
-    if "<|assistant|>" in generated_output:
-        story_text = generated_output.split("<|assistant|>")[-1].strip()
-    else:
-        story_text = generated_output.replace(prompt, "").strip()
-    
-    # Standard fairy-tale end safe check
+    # OPTIMIZATION: Fallback mechanism to fix truncated sentences
     if not story_text.endswith(('.', '!', '?', '"')):
+        # Find the last completed sentence
         last_punctuation = max(story_text.rfind('.'), story_text.rfind('!'), story_text.rfind('?'))
         if last_punctuation != -1:
-            story_text = story_text[:last_punctuation + 1] + " And they lived happily ever after!"
+            # Cut off the broken sentence fragment and append a classic fairy-tale ending
+            story_text = story_text[:last_punctuation + 1] + " And they lived happily ever after! What do you think happens next?"
         else:
-            story_text += "... And they lived happily ever after!"
+            # If no punctuation was found at all, append a clean closure
+            story_text += "... And they lived happily ever after! Would you like to join their adventure?"
             
     return story_text
 
@@ -122,96 +126,100 @@ def text2audio(story_text):
 
 
 # =========================================================
-# Streamlit Interface with Premium Kid-Friendly UI/UX
+# Streamlit Interface with Kid-Friendly UI/UX
 # =========================================================
 
 def apply_custom_styles():
     """Injects colorful, child-friendly CSS styling into the Streamlit UI."""
     st.markdown("""
         <style>
+        /* Colorful background gradient */
         .stApp {
-            background: linear-gradient(135deg, #FFF5E6 0%, #FFFFFF 60%, #E8F5E9 100%);
+            background: linear-gradient(135deg, #FFEFBA 0%, #FFFFFF 50%, #E0C3FC 100%);
         }
+        
+        /* Main heading styling */
         h1 {
-            color: #FF6B6B !important;
-            font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', cursive;
+            color: #FF4B4B !important;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
             text-align: center;
-            font-size: 3.2rem !important;
-            text-shadow: 3px 3px 0px #FFE600;
-            margin-bottom: 5px !important;
+            font-size: 2.8rem !important;
+            text-shadow: 2px 2px #FFE600;
         }
+        
+        /* Subheaders styling */
         h3, h2 {
-            color: #4A4E69 !important;
+            color: #6C5CE7 !important;
             font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
         }
+
+        /* Card styling for story output */
         .story-card {
             background-color: #FFFFFF;
-            border: 4px dashed #FF8E53;
-            border-radius: 25px;
-            padding: 25px;
-            box-shadow: 0px 10px 20px rgba(255, 142, 83, 0.15);
-            font-size: 1.3rem;
-            line-height: 1.7;
-            color: #2F3E46;
+            border: 4px solid #FF7675;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0px 8px 15px rgba(0, 0, 0, 0.1);
+            font-size: 1.2rem;
+            line-height: 1.6;
+            color: #2D3436;
             font-family: 'Comic Sans MS', cursive, sans-serif;
         }
+        
+        /* Custom styled button */
         div.stButton > button {
-            background: linear-gradient(45deg, #FF6B6B, #FF8E53) !important;
+            background: linear-gradient(45deg, #FF7675, #FAB1A0) !important;
             color: white !important;
-            font-size: 1.5rem !important;
+            font-size: 1.4rem !important;
             font-weight: bold !important;
-            border-radius: 35px !important;
-            border: 3px solid #FFFFFF !important;
-            padding: 15px 30px !important;
-            box-shadow: 0 8px 20px rgba(255, 107, 107, 0.3) !important;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+            border-radius: 30px !important;
+            border: none !important;
+            padding: 12px 30px !important;
+            box-shadow: 0 5px 15px rgba(255, 118, 117, 0.4) !important;
+            transition: transform 0.2s ease !important;
             width: 100%;
         }
+        
         div.stButton > button:hover {
-            transform: translateY(-4px) scale(1.02) !important;
-            background: linear-gradient(45deg, #4ECDC4, #5568FE) !important;
-            box-shadow: 0 10px 25px rgba(78, 205, 196, 0.4) !important;
-        }
-        .toy-grid {
-            text-align: center;
-            font-size: 2.2rem;
-            margin: 15px 0px;
-            letter-spacing: 12px;
+            transform: scale(1.03) !important;
+            background: linear-gradient(45deg, #00CEC9, #81ECEC) !important;
         }
         </style>
     """, unsafe_allow_html=True)
 
 
 def main():
-    st.set_page_config(page_title="Magic Toybox Storyteller", page_icon="🧸", layout="centered")
+    st.set_page_config(page_title="Magic Storyteller", page_icon="🦄", layout="centered")
     apply_custom_styles()
     
-    st.title("🧸 Magic Storybox AI 🚀")
-    st.markdown('<div class="toy-grid">🎈 🐱 🚗 🦄 🎨 🧩</div>', unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; font-size: 1.3rem; color: #4A5568; font-family: \"Comic Sans MS\";'><b>Upload a picture, and watch the magic wizard spin a rapid audio tale! ✨</b></p>", unsafe_allow_html=True)
-    st.write("---")
+    st.title("🦄 Magic Storyteller for Kids! 🎉")
+    st.markdown("<p style='text-align: center; font-size: 1.2rem; color: #636E72;'><b>Upload a picture, and let the AI bring it to life with a fun story!</b></p>", unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader("📸 Drop your favorite photo here, little adventurer:", type=["jpg", "jpeg", "png"])
+    # Interactive Image Upload Box
+    uploaded_file = st.file_uploader("📸 Drop your favorite photo here:", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
-        st.image(image, caption="🌟 Your Magical Input", use_container_width=True)
         
+        # Display picture with rounded aesthetic
+        st.image(image, caption="🌟 Your Magic Picture", use_container_width=True)
+        
+        # Action button
         if st.button("✨ Spin the Magic Story Wheel! ✨"):
             
             # Step 1: Image Captioning
-            with st.spinner("🔍 1️⃣ Wizard is inspecting your picture..."):
+            with st.spinner("🔍 1️⃣ Looking closely at your picture..."):
                 caption = img2text(image)
                 st.success(f"🎨 **I see:** {caption}")
 
             # Step 2: Story Generation
-            with st.spinner("✍️ 2️⃣ Mixing secret magic words at light speed..."):
+            with st.spinner("✍️ 2️⃣ Writing a super exciting story for you..."):
                 story = text2story(caption)
                 st.subheader("📖 Story Time!")
                 st.markdown(f'<div class="story-card">{story}</div>', unsafe_allow_html=True)
 
             # Step 3: Text to Audio
-            with st.spinner("🎶 3️⃣ Humming the magical tunes..."):
+            with st.spinner("🎶 3️⃣ Turning your story into magic sound..."):
                 audio_file_path = text2audio(story)
                 st.subheader("🎧 Listen & Play Along:")
                 st.audio(audio_file_path, format="audio/mp3")

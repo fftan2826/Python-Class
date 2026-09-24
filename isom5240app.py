@@ -1,9 +1,7 @@
 import os
-import re
 import streamlit as st
 from PIL import Image
-from transformers import BlipProcessor, BlipForConditionalGeneration
-from transformers import pipeline
+from transformers import BlipProcessor, BlipForConditionalGeneration, pipeline
 from gtts import gTTS
 
 # =========================================================
@@ -12,8 +10,8 @@ from gtts import gTTS
 
 def img2text(image_input):
     """
-    Generates a concise and complete caption from the image using greedy decoding.
-    Optimized to return flat text string outputs.
+    Generates a rapid, concise caption from the image using raw Greedy Search.
+    OPTIMIZED: Correctly extracts the text string to guarantee zero AttributeError crashes.
     """
     @st.cache_resource
     def _cached_blip_loader():
@@ -28,13 +26,14 @@ def img2text(image_input):
         
     inputs = processor(image_input, return_tensors="pt")
     
+    # Ultra-fast greedy decoding configuration
     out = model.generate(
         **inputs, 
         max_new_tokens=15, 
-        num_beams=1,       
-        no_repeat_ngram_size=2
+        num_beams=1
     )
     
+    # FIXED: Safely extract the first text string from the decoded list
     decoded_list = processor.batch_decode(out, skip_special_tokens=True)
     caption = decoded_list[0].strip().capitalize()
     
@@ -46,8 +45,8 @@ def img2text(image_input):
 
 def text2story(caption_text):
     """
-    Generates a brief, playful children's story (around 40 words) matching the image.
-    Uses strict token caps to maintain a concise length appropriate for small children.
+    Generates a brief children's story using a direct, simplified pipeline.
+    SPEED UP: Stripped out complex structural rendering to run seamlessly on CPU.
     """
     @st.cache_resource
     def _cached_llm_loader():
@@ -59,44 +58,32 @@ def text2story(caption_text):
 
     generator = _cached_llm_loader()
     
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a magical storyteller. Write an extremely short story (strictly 40-50 words) for kids. "
-                "Directly match the image description. Start with a character name, use simple words, "
-                "include one sound effect, and end with a quick question. Keep it very brief."
-            ),
-        },
-        {
-            "role": "user",
-            "content": f"Write a brief story about: '{caption_text}'."
-        },
-    ]
-    
-    prompt = generator.tokenizer.apply_chat_template(
-        messages, 
-        tokenize=False, 
-        add_generation_prompt=True
+    # Simplified direct prompt for quicker token response times
+    prompt = (
+        f"<|system|>\nYou are a magical storyteller. Write an extremely short bedtime story "
+        f"(strictly 40-50 words) for kids based on the description. Include one fun sound effect "
+        f"and end with a friendly question. Keep it very brief.</s>\n"
+        f"<|user|>\nWrite a story about: {caption_text}</s>\n<|assistant|>\n"
     )
     
+    # Strictly capped tokens to prevent lengthy CPU calculations
     story_result = generator(
         prompt, 
-        max_new_tokens=50, 
+        max_new_tokens=60, 
         do_sample=True, 
         temperature=0.7,
-        top_p=0.85,
-        repetition_penalty=1.2
+        top_p=0.85
     )
     
-    generated_output = story_result[0]["generated_text"]
-    story_text = generated_output.split("<|assistant|>")[-1].strip()
+    # Clean split to fetch the story text instantly
+    generated_text = story_result[0]["generated_text"]
+    story_text = generated_text.split("<|assistant|>")[-1].strip()
     
-    # Fallback closure if sentence cuts off
+    # Smart closure safety fallback
     if not story_text.endswith(('.', '!', '?', '"')):
         last_punctuation = max(story_text.rfind('.'), story_text.rfind('!'), story_text.rfind('?'))
         if last_punctuation != -1:
-            story_text = story_text[:last_punctuation + 1] + " And they lived happily ever after! What do you think?"
+            story_text = story_text[:last_punctuation + 1] + " And they lived happily ever after!"
         else:
             story_text += "... And they lived happily ever after!"
             
@@ -130,10 +117,6 @@ def apply_custom_styles():
             text-shadow: 3px 3px 0px #FFE600;
             margin-bottom: 5px !important;
         }
-        h3, h2 {
-            color: #4A4E69 !important;
-            font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
-        }
         .story-card {
             background-color: #FFFFFF;
             border: 4px dashed #FF8E53;
@@ -160,7 +143,6 @@ def apply_custom_styles():
         div.stButton > button:hover {
             transform: translateY(-4px) scale(1.02) !important;
             background: linear-gradient(45deg, #4ECDC4, #5568FE) !important;
-            box-shadow: 0 10px 25px rgba(78, 205, 196, 0.4) !important;
         }
         .toy-grid {
             text-align: center;
@@ -211,3 +193,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

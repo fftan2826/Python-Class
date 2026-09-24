@@ -12,13 +12,11 @@ from gtts import gTTS
 
 def img2text(image_input):
     """
-    Generates a rapid, concise caption using raw Greedy Search.
-    MAX SPEED: Removed ngram penalties and beams to make image decoding instant on CPU.
+    Generates a concise and complete caption from the image using greedy decoding.
+    Optimized to return flat text string outputs.
     """
-    # OPTIMIZATION: Cache the BLIP loader internally
     @st.cache_resource
     def _cached_blip_loader():
-        # Strictly using the professor's recommended model
         processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
         model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
         return processor, model
@@ -30,14 +28,13 @@ def img2text(image_input):
         
     inputs = processor(image_input, return_tensors="pt")
     
-    # MAXIMUM SPEED OPTIMIZATION: Stripped down all heavy repetition penalties for instantaneous execution
     out = model.generate(
         **inputs, 
-        max_new_tokens=15, # Kept ultra-short for rapid text delivery
-        num_beams=1        # Raw greedy search for instant CPU execution
+        max_new_tokens=15, 
+        num_beams=1,       
+        no_repeat_ngram_size=2
     )
     
-    # FIXED: Safely extract the plain string from the list using batch_decode
     decoded_list = processor.batch_decode(out, skip_special_tokens=True)
     caption = decoded_list[0].strip().capitalize()
     
@@ -49,10 +46,9 @@ def img2text(image_input):
 
 def text2story(caption_text):
     """
-    Generates a brief, punchy children's story within seconds.
-    SPEED UP: Strictly limited max_new_tokens to 50 for rapid CPU generation.
+    Generates a brief, playful children's story (around 40 words) matching the image.
+    Uses strict token caps to maintain a concise length appropriate for small children.
     """
-    # OPTIMIZATION: Cache the LLM pipeline loader internally
     @st.cache_resource
     def _cached_llm_loader():
         return pipeline(
@@ -63,7 +59,6 @@ def text2story(caption_text):
 
     generator = _cached_llm_loader()
     
-    # Highly specific prompt instructing the model to be extremely concise (approx 40-50 words)
     messages = [
         {
             "role": "system",
@@ -85,7 +80,6 @@ def text2story(caption_text):
         add_generation_prompt=True
     )
     
-    # SPEED OPTIMIZATION: Limited to 50 tokens to maximize generation speed on CPU
     story_result = generator(
         prompt, 
         max_new_tokens=50, 
@@ -95,11 +89,10 @@ def text2story(caption_text):
         repetition_penalty=1.2
     )
     
-    # Extract model output
     generated_output = story_result[0]["generated_text"]
     story_text = generated_output.split("<|assistant|>")[-1].strip()
     
-    # Fast smart-fallback mechanism to tidy up the ending
+    # Fallback closure if sentence cuts off
     if not story_text.endswith(('.', '!', '?', '"')):
         last_punctuation = max(story_text.rfind('.'), story_text.rfind('!'), story_text.rfind('?'))
         if last_punctuation != -1:
@@ -185,7 +178,7 @@ def main():
     
     st.title("🧸 Magic Storybox AI 🚀")
     st.markdown('<div class="toy-grid">🎈 🐱 🚗 🦄 🎨 🧩</div>', unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; font-size: 1.3rem; color: #4A5568; font-family: \"Comic Sans MS\";'><b>Upload a picture, and watch the magic wizard spin a rapid audio tale! ✨</b></p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 1.3rem; color: #4A5568; font-family: \"Comic Sans MS\";'><b>Upload a picture, and watch the magic wizard spin an audio tale! ✨</b></p>", unsafe_allow_html=True)
     st.write("---")
 
     uploaded_file = st.file_uploader("📸 Drop your favorite photo here, little adventurer:", type=["jpg", "jpeg", "png"])
@@ -197,11 +190,11 @@ def main():
         if st.button("✨ Spin the Magic Story Wheel! ✨"):
             
             # Step 1: Image Captioning
-            with st.spinner("🔍 1️⃣ Wizard is checking your picture quickly..."):
+            with st.spinner("🔍 1️⃣ Wizard is checking your picture..."):
                 caption = img2text(image)
                 st.success(f"🎨 **I see:** {caption}")
 
-            # Step 2: Story Generation (FIXED: Removed "Light speed" text)
+            # Step 2: Story Generation
             with st.spinner("✍️ 2️⃣ Shaking the magic wand to create a short tale..."):
                 story = text2story(caption)
                 st.subheader("📖 Story Time!")

@@ -13,10 +13,12 @@ from gtts import gTTS
 def img2text(image_input):
     """
     Generates a rapid, concise, and complete caption using Greedy Search.
-    SPEED UP: Dropped beam search (num_beams=1) to make image processing 5x faster on CPU.
+    FIXED: Resolved the list-to-string conversion bug in greedy decoding to completely eliminate AttributeError.
     """
+    # OPTIMIZATION: Cache the BLIP loader internally
     @st.cache_resource
     def _cached_blip_loader():
+        # Strictly using the professor's recommended model
         processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
         model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
         return processor, model
@@ -35,9 +37,11 @@ def img2text(image_input):
         num_beams=1,       
         no_repeat_ngram_size=2
     )
-    caption = processor.decode(out, skip_special_tokens=True)
     
-    caption = caption.strip().capitalize()
+    # FIXED: Using batch_decode and explicitly selecting the first index [0] to ensure it is always a string
+    decoded_list = processor.batch_decode(out, skip_special_tokens=True)
+    caption = decoded_list[0].strip().capitalize()
+    
     if not caption.endswith('.'):
         caption += '.'
         
@@ -49,6 +53,7 @@ def text2story(caption_text):
     Generates a brief, punchy children's story within seconds.
     SPEED UP: Strictly limited max_new_tokens to 50 for rapid CPU generation.
     """
+    # OPTIMIZATION: Cache the LLM pipeline loader internally
     @st.cache_resource
     def _cached_llm_loader():
         return pipeline(
@@ -214,4 +219,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

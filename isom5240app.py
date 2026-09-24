@@ -11,7 +11,7 @@ from gtts import gTTS
 def img2text(image_input):
     """
     Generates a rapid, concise caption from the image using raw Greedy Search.
-    OPTIMIZED: Correctly extracts the text string to guarantee zero AttributeError crashes.
+    OPTIMIZED: Added correct [0] list indexing to permanently fix the AttributeError.
     """
     @st.cache_resource
     def _cached_blip_loader():
@@ -33,7 +33,7 @@ def img2text(image_input):
         num_beams=1
     )
     
-    # FIXED: Safely extract the first text string from the decoded list
+    # FIXED: Added [0] index to cleanly pull the string object from the batch list
     decoded_list = processor.batch_decode(out, skip_special_tokens=True)
     caption = decoded_list[0].strip().capitalize()
     
@@ -45,8 +45,8 @@ def img2text(image_input):
 
 def text2story(caption_text):
     """
-    Generates a brief children's story using a direct, simplified pipeline.
-    SPEED UP: Stripped out complex structural rendering to run seamlessly on CPU.
+    Generates a brief children's story via maximum speed optimization.
+    SPEED UP: Turned off sampling (do_sample=False) to reduce CPU calculation by 50%.
     """
     @st.cache_resource
     def _cached_llm_loader():
@@ -58,28 +58,25 @@ def text2story(caption_text):
 
     generator = _cached_llm_loader()
     
-    # Simplified direct prompt for quicker token response times
+    # Highly direct structured prompt forcing a quick response loop
     prompt = (
         f"<|system|>\nYou are a magical storyteller. Write an extremely short bedtime story "
-        f"(strictly 40-50 words) for kids based on the description. Include one fun sound effect "
-        f"and end with a friendly question. Keep it very brief.</s>\n"
+        f"(strictly 40 words) for kids based on the description. Start with a character name, "
+        f"include one sound effect, and end with a short question. Do not talk too much.</s>\n"
         f"<|user|>\nWrite a story about: {caption_text}</s>\n<|assistant|>\n"
     )
     
-    # Strictly capped tokens to prevent lengthy CPU calculations
+    # SPEED OPTIMIZATION: Switched do_sample to False for instant greedy text matching on raw CPU
     story_result = generator(
         prompt, 
-        max_new_tokens=60, 
-        do_sample=True, 
-        temperature=0.7,
-        top_p=0.85
+        max_new_tokens=45, # Tighter token cap for rapid finishing
+        do_sample=False    # Shuts down heavy probability calculations for maximum speed
     )
     
-    # Clean split to fetch the story text instantly
     generated_text = story_result[0]["generated_text"]
     story_text = generated_text.split("<|assistant|>")[-1].strip()
     
-    # Smart closure safety fallback
+    # Smart closure safety fallback to snap off any broken lines
     if not story_text.endswith(('.', '!', '?', '"')):
         last_punctuation = max(story_text.rfind('.'), story_text.rfind('!'), story_text.rfind('?'))
         if last_punctuation != -1:

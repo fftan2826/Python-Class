@@ -15,10 +15,8 @@ def img2text(image_input):
     Generates a rapid, concise, and complete caption using Greedy Search.
     SPEED UP: Dropped beam search (num_beams=1) to make image processing 5x faster on CPU.
     """
-    # OPTIMIZATION: Cache the BLIP loader internally
     @st.cache_resource
     def _cached_blip_loader():
-        # Strictly using the professor's recommended model
         processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
         model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
         return processor, model
@@ -30,16 +28,15 @@ def img2text(image_input):
         
     inputs = processor(image_input, return_tensors="pt")
     
-    # SPEED & LENGTH OPTIMIZATION: Greedy search (num_beams=1) for lightning speed and shorter output
+    # Greedy search for instant execution
     out = model.generate(
         **inputs, 
-        max_new_tokens=20, # Reduced to keep the description short and sweet
-        num_beams=1,       # Switched to greedy decoding for instant execution
+        max_new_tokens=20, 
+        num_beams=1,       
         no_repeat_ngram_size=2
     )
-    caption = processor.decode(out[0], skip_special_tokens=True)
+    caption = processor.decode(out, skip_special_tokens=True)
     
-    # Post-processing clean-up
     caption = caption.strip().capitalize()
     if not caption.endswith('.'):
         caption += '.'
@@ -49,10 +46,9 @@ def img2text(image_input):
 
 def text2story(caption_text):
     """
-    Generates a lively, interactive children's story (50-100 words).
-    SPEED UP: Managed via concise constraints for lightning-fast execution on CPU.
+    Generates a brief, punchy children's story within seconds.
+    SPEED UP: Strictly limited max_new_tokens to 50 for rapid CPU generation.
     """
-    # OPTIMIZATION: Cache the LLM pipeline loader internally
     @st.cache_resource
     def _cached_llm_loader():
         return pipeline(
@@ -63,21 +59,19 @@ def text2story(caption_text):
 
     generator = _cached_llm_loader()
     
-    # Playful prompt designed specifically for children aged 3-10
+    # Highly specific prompt instructing the model to be extremely concise (approx 40-50 words)
     messages = [
         {
             "role": "system",
             "content": (
-                "You are a magical, energetic children's storyteller. Write a complete, "
-                "exciting short story (50 to 70 words) for kids aged 3 to 10. "
-                "The story MUST directly match the provided image description. "
-                "Use fun sound effects (like 'Wheee!', 'Splash!', or 'Pop!'), give the main character a name, "
-                "and end with an exciting question to the child reader! Do not cut off mid-sentence."
+                "You are a magical storyteller. Write an extremely short story (strictly 40-50 words) for kids. "
+                "Directly match the image description. Start with a character name, use simple words, "
+                "include one sound effect, and end with a quick question. Keep it very brief."
             ),
         },
         {
             "role": "user",
-            "content": f"Write a complete exciting short story based on this image description: '{caption_text}'."
+            "content": f"Write a brief story about: '{caption_text}'."
         },
     ]
     
@@ -87,10 +81,10 @@ def text2story(caption_text):
         add_generation_prompt=True
     )
     
+    # SPEED OPTIMIZATION: Limited to 50 tokens and removed min_new_tokens to maximize generation speed on CPU
     story_result = generator(
         prompt, 
-        max_new_tokens=100, 
-        min_new_tokens=60,
+        max_new_tokens=50, 
         do_sample=True, 
         temperature=0.7,
         top_p=0.85,
@@ -101,13 +95,13 @@ def text2story(caption_text):
     generated_output = story_result[0]["generated_text"]
     story_text = generated_output.split("<|assistant|>")[-1].strip()
     
-    # Fallback mechanism to fix truncated sentences
+    # Fast smart-fallback mechanism to tidy up the ending
     if not story_text.endswith(('.', '!', '?', '"')):
         last_punctuation = max(story_text.rfind('.'), story_text.rfind('!'), story_text.rfind('?'))
         if last_punctuation != -1:
-            story_text = story_text[:last_punctuation + 1] + " And they lived happily ever after! What do you think happens next?"
+            story_text = story_text[:last_punctuation + 1] + " And they lived happily ever after! What do you think?"
         else:
-            story_text += "... And they lived happily ever after! Would you like to join their adventure?"
+            story_text += "... And they lived happily ever after!"
             
     return story_text
 
@@ -128,12 +122,9 @@ def apply_custom_styles():
     """Injects colorful, child-friendly CSS styling into the Streamlit UI."""
     st.markdown("""
         <style>
-        /* Colorful background gradient */
         .stApp {
             background: linear-gradient(135deg, #FFF5E6 0%, #FFFFFF 60%, #E8F5E9 100%);
         }
-        
-        /* Main heading styling */
         h1 {
             color: #FF6B6B !important;
             font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', cursive;
@@ -142,14 +133,10 @@ def apply_custom_styles():
             text-shadow: 3px 3px 0px #FFE600;
             margin-bottom: 5px !important;
         }
-        
-        /* Subheaders styling */
         h3, h2 {
             color: #4A4E69 !important;
             font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
         }
-
-        /* Card styling for story output */
         .story-card {
             background-color: #FFFFFF;
             border: 4px dashed #FF8E53;
@@ -161,8 +148,6 @@ def apply_custom_styles():
             color: #2F3E46;
             font-family: 'Comic Sans MS', cursive, sans-serif;
         }
-        
-        /* Custom styled bouncy button */
         div.stButton > button {
             background: linear-gradient(45deg, #FF6B6B, #FF8E53) !important;
             color: white !important;
@@ -175,14 +160,11 @@ def apply_custom_styles():
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
             width: 100%;
         }
-        
         div.stButton > button:hover {
             transform: translateY(-4px) scale(1.02) !important;
             background: linear-gradient(45deg, #4ECDC4, #5568FE) !important;
             box-shadow: 0 10px 25px rgba(78, 205, 196, 0.4) !important;
         }
-
-        /* Toy icon decoration grid */
         .toy-grid {
             text-align: center;
             font-size: 2.3rem;
@@ -202,7 +184,6 @@ def main():
     st.markdown("<p style='text-align: center; font-size: 1.3rem; color: #4A5568; font-family: \"Comic Sans MS\";'><b>Upload a picture, and watch the magic wizard spin a rapid audio tale! ✨</b></p>", unsafe_allow_html=True)
     st.write("---")
 
-    # Interactive Image Upload Box
     uploaded_file = st.file_uploader("📸 Drop your favorite photo here, little adventurer:", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
@@ -233,3 +214,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

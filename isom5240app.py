@@ -26,14 +26,14 @@ def img2text(image_input):
         
     inputs = processor(image_input, return_tensors="pt")
     
-    # Ultra-short token length for direct factory sentence description
+    # Ultra-short token length for direct factual sentence description
     out = model.generate(
         **inputs, 
         max_new_tokens=15, 
         num_beams=1
     )
     
-    # FIXED: Added [0] index to fetch the exact text string safely from the batch array
+    # Safely extract the exact text string from the batch array
     decoded_list = processor.batch_decode(out, skip_special_tokens=True)
     caption = decoded_list[0].strip().capitalize()
     
@@ -45,8 +45,8 @@ def img2text(image_input):
 
 def text2story(caption_text):
     """
-    Generates a brief children's story via straight prompt injection.
-    SPEED UP: Stripped conversational templates to prevent single-core CPU deadlocks.
+    Generates a continuous, single-paragraph magical fairy tale (strictly no lists).
+    SPEED UP: Restricted token budget heavily to ensure completion in under 15 seconds.
     """
     @st.cache_resource
     def _cached_llm_loader():
@@ -58,31 +58,35 @@ def text2story(caption_text):
 
     generator = _cached_llm_loader()
     
-    # RAW PUNCHY PROMPT: Forces TinyLlama to finish the narrative immediately without overthinking
+    # STRICT FORMATTING PROMPT: Explicitly bans 1,2,3,4,5 lists and forces a continuous narrative paragraph
     prompt = (
-        f"Write a magical children story of 30 words about: {caption_text} "
-        f"Give the hero a name, add one sound effect like 'Wow!', and end with a question: "
+        f"Write a magical fairy tale story in one short continuous paragraph (no lists, no bullet points, "
+        f"strictly around 30 words) for little kids based on this: {caption_text} "
+        f"Once upon a time, a cute character named Billy saw this. 'Wow!' he cheered. "
     )
     
-    # MAXIMUM CPU SPEED: Kept tokens ultra low to ensure instant generation loop completion
+    # SPEED OPTIMIZATION: Cut max_new_tokens down to 35 for instant paragraph completion on raw CPU
     story_result = generator(
         prompt, 
-        max_new_tokens=45, 
-        do_sample=False # Greedy prediction cuts computational weight by 50%
+        max_new_tokens=35, 
+        do_sample=False # Greedy mode saves 50% computational overhead
     )
     
     generated_text = story_result[0]["generated_text"]
     story_text = generated_text.replace(prompt, "").strip()
     
+    # Prepend the fairy tale beginning to make it a beautifully complete story paragraph
+    full_fairy_tale = f"Once upon a time, a cute character named Billy saw this. 'Wow!' he cheered. {story_text}"
+    
     # Smart closure safety fallback to snap off any broken lines cleanly
-    if not story_text.endswith(('.', '!', '?', '"')):
-        last_punctuation = max(story_text.rfind('.'), story_text.rfind('!'), story_text.rfind('?'))
+    if not full_fairy_tale.endswith(('.', '!', '?', '"')):
+        last_punctuation = max(full_fairy_tale.rfind('.'), full_fairy_tale.rfind('!'), full_fairy_tale.rfind('?'))
         if last_punctuation != -1:
-            story_text = story_text[:last_punctuation + 1] + " And they lived happily ever after!"
+            full_fairy_tale = full_fairy_tale[:last_punctuation + 1] + " And they lived happily ever after! What do you think?"
         else:
-            story_text += "... And they lived happily ever after!"
+            full_fairy_tale += "... And they lived happily ever after! What do you think?"
             
-    return story_text
+    return full_fairy_tale
 
 
 def text2audio(story_text):
@@ -188,4 +192,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
